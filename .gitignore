@@ -6,3 +6,6 @@ dist/
 .venv/
 tools/java/out/
 *.circ.bak
+_*.png
+_*.circ
+_*.json
