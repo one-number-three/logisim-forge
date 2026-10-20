@@ -242,3 +242,24 @@ normalize(path)      # 内部调用 tools/java/SaveAs.java
 
 `examples/74ls138.py` 现在就是这么做的。往返之后 `source` 变成真实版本号，Base 库带上 Text Tool，
 树里能看到「基础库 (Base) → 戳工具 / 编辑工具 / 选择工具 / 连线工具 / 文本工具」。
+
+### 14b. 工具条的内容也存在文件里：`<toolbar>`
+
+补上 Base 库之后，树里能看到「基础库 → 戳工具/编辑工具…」，但**工具条上仍然没有按钮**。
+原因是工具条（那一排手、箭头、引脚、非门…）是 `<toolbar>` 元素写死在 `.circ` 里的，不是偏好设置：
+
+```xml
+<toolbar>
+  <tool lib="0" name="Poke Tool"/>
+  <tool lib="0" name="Edit Tool"/>
+  <sep/>
+  <tool lib="1" name="Pin"><a name="tristate" val="false"/></tool>
+  <tool lib="1" name="Pin"><a name="facing" val="west"/><a name="output" val="true"/></tool>
+  <tool lib="2" name="NOT Gate"/>
+  <tool lib="2" name="AND Gate"/>
+</toolbar>
+```
+
+没有这一段，Logisim 就当“这个工程本来就没有工具”，打开后工具条空着，元件也拖不动。
+连同 `<mappings>`（鼠标键绑定）和 `<options>`（gateUndefined / simlimit / simrand）一起写全，
+生成的文件就和 Logisim 自己保存的一模一样了。
