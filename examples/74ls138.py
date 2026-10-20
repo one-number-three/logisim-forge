@@ -1,4 +1,4 @@
-﻿"""Example: 74LS138-style 3-to-8 decoder, one output per minterm.
+"""Example: 74LS138-style 3-to-8 decoder, one output per minterm.
 
     python examples/74ls138.py
 """
@@ -7,7 +7,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from logisim_forge import Circuit, verify  # noqa: E402
+from logisim_forge import Circuit, normalize, verify  # noqa: E402
 
 GX, Y0, STEP = 780, 520, 70
 BUS = {"A": 540, "A_": 520, "B": 500, "B_": 480, "C": 460, "C_": 440}
@@ -82,6 +82,7 @@ def main() -> int:
     path = os.path.join(here, "74ls138.circ")
     circuit = build()
     circuit.save(path)
+    normalize(path)          # let Logisim re-save it: that is what it expects on disk
     report = verify(path, drivers=circuit.drivers())
     print(json_dump(report.as_dict()))
     if not report.ok:

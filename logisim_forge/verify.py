@@ -72,6 +72,28 @@ def dump(circ_path: str) -> str:
     return out
 
 
+def normalize(circ_path: str) -> str:
+    """Re-save the file with Logisim itself (load -> save, in place).
+
+    Logisim silently drops a <lib> that has no children, and our hand written
+    XML can differ from what it writes in other small ways.  Round-tripping
+    through SaveAs makes the on-disk file byte-for-byte what Logisim would
+    write, so it opens exactly like a hand-saved project.
+    """
+    ensure_dumper()
+    env = dict(os.environ)
+    env["JAVA_TOOL_OPTIONS"] = (
+        "-Djava.awt.headless=true -Djava.util.prefs.PreferencesFactory=MemPrefsFactory")
+    cp = os.pathsep.join([find_jar(), JAVA_OUT])
+    tmp = circ_path + ".tmp.circ"
+    res = subprocess.run([find_java(), "-Xmx1g", "-cp", cp, "SaveAs", circ_path, tmp],
+                         capture_output=True, text=True, encoding="utf-8", env=env)
+    if "saved=true" not in res.stdout:
+        raise RuntimeError("Logisim could not re-save the file:\n" + res.stdout + res.stderr)
+    os.replace(tmp, circ_path)
+    return circ_path
+
+
 @dataclass
 class Netlist:
     components: list = field(default_factory=list)   # [{name, loc, ports:[(p, in, out)]}]

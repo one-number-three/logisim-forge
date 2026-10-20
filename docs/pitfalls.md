@@ -1,4 +1,4 @@
-﻿# 踩坑记
+# 踩坑记
 
 这份文档记录做这个项目时**真实撞上的**问题。Logisim 的特点是：写错了不报错，
 只是静静地画错。下面每条都给出症状、原因、修法。
@@ -202,3 +202,43 @@ Logisim 内部按 10px 吸附。写 `(105, 60)` 不会报错，但端口在 110�
 
 用 `PrintWindow` 抓 Java 窗口时，可能拿到**尚未重绘**的一帧：整片线都是蓝的，
 看起来像全悬空。截图只用来检查版式，正确性交给 `verify_circuit()`。
+
+---
+
+## 14. 空的 `<lib>` 会被 Logisim 丢掉——表现是“没有基础库、没有工具、元件拖不动”
+
+**症状**：打开生成的 `.circ`，左侧树里没有「基础库 (Base)」，工具条只有“添加/上移/下移/删除电路”，
+画布上的元件选不中、拖不动。新建一个空工程则一切正常。
+
+**原因**：为了省事写成自闭合的空元素
+
+```xml
+<lib desc="#Base" name="0"/>
+```
+
+Logisim 加载时会把**没有子元素的库丢掉**。Base 库一没，`Poke / Select / Text` 这些编辑工具就都没了——
+于是没有工具栏、也没法框选。文件本身没错，是“少了内容”。
+
+**修法**：给 Base 库写上 Logisim 自己会写的那个子元素：
+
+```xml
+<lib desc="#Base" name="0">
+  <tool name="Text Tool">
+    <a name="text" val=""/>
+    <a name="font" val="Dialog plain 12"/>
+    <a name="color" val="#000000"/>
+    <a name="halign" val="center"/>
+    <a name="valign" val="base"/>
+  </tool>
+</lib>
+```
+
+**更稳的修法**：生成完让 **Logisim 自己再存一遍**（load → save 往返），产物就是它亲手写的格式：
+
+```python
+circuit.save(path)
+normalize(path)      # 内部调用 tools/java/SaveAs.java
+```
+
+`examples/74ls138.py` 现在就是这么做的。往返之后 `source` 变成真实版本号，Base 库带上 Text Tool，
+树里能看到「基础库 (Base) → 戳工具 / 编辑工具 / 选择工具 / 连线工具 / 文本工具」。

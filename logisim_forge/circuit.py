@@ -5,7 +5,10 @@ import xml.sax.saxutils as sax
 
 from . import geometry
 
-WIRING, GATES, IO = 0, 1, 2
+# Logisim library indices as declared in the file, in order.
+# Base must be included: it owns the Poke / Edit / Text tools, so without it the
+# window has no tool palette at all and nothing on the canvas can be selected.
+BASE, WIRING, GATES, IO = 0, 1, 2, 3
 
 
 class Circuit:
@@ -97,9 +100,21 @@ class Circuit:
         lines = [
             '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
             '<project source="2.7.1" version="1.0">',
-            '  <lib desc="#Wiring" name="0"/>',
-            '  <lib desc="#Gates" name="1"/>',
-            '  <lib desc="#I/O" name="2"/>',
+            # Base must not be empty: Logisim silently drops a <lib> without
+            # children, taking Poke / Select / Text with it (no toolbar, no
+            # way to drag anything).  Writing the Text tool keeps it alive.
+            '  <lib desc="#Base" name="0">',
+            '    <tool name="Text Tool">',
+            '      <a name="text" val=""/>',
+            '      <a name="font" val="Dialog plain 12"/>',
+            '      <a name="color" val="#000000"/>',
+            '      <a name="halign" val="center"/>',
+            '      <a name="valign" val="base"/>',
+            '    </tool>',
+            '  </lib>',
+            '  <lib desc="#Wiring" name="1"/>',
+            '  <lib desc="#Gates" name="2"/>',
+            '  <lib desc="#I/O" name="3"/>',
             '  <main name="%s"/>' % sax.escape(self.name),
             '  <options/>',
             '  <circuit name="%s">' % sax.escape(self.name),
