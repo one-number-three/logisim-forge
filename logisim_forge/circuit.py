@@ -116,7 +116,6 @@ class Circuit:
             '  <lib desc="#Gates" name="2"/>',
             '  <lib desc="#I/O" name="3"/>',
             '  <main name="%s"/>' % sax.escape(self.name),
-            '  <main name="%s"/>' % sax.escape(self.name),
             '  <options>',
             '    <a name="gateUndefined" val="ignore"/>',
             '    <a name="simlimit" val="1000"/>',

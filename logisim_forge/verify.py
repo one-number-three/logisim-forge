@@ -11,12 +11,23 @@ import os
 import re
 import shutil
 import subprocess
+import hashlib
+import tempfile
 from collections import defaultdict
 from dataclasses import dataclass, field
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-JAVA_SRC = os.path.join(os.path.dirname(HERE), "tools", "java")
-JAVA_OUT = os.path.join(JAVA_SRC, "out")
+JAVA_SRC = os.path.join(HERE, "java")
+
+
+def java_output_dir() -> str:
+    """Cache compiled classes by exact source and Logisim binary content."""
+    digest = hashlib.sha256()
+    for path in [find_jar()] + sorted(os.path.join(JAVA_SRC, f) for f in os.listdir(JAVA_SRC) if f.endswith('.java')):
+        with open(path, 'rb') as fh:
+            for block in iter(lambda: fh.read(1024 * 1024), b''):
+                digest.update(block)
+    return os.path.join(tempfile.gettempdir(), 'logisim-forge-java', digest.hexdigest())
 
 COMP_RE = re.compile(r"\s{2}(.+?) loc=\((\d+),(\d+)\) bounds")
 PORT_RE = re.compile(r"\s+port \((\d+),(\d+)\) .*in=(\w+) out=(\w+)")
@@ -44,28 +55,34 @@ def find_jar() -> str:
     raise RuntimeError("no Logisim jar found; set LOGISIM_JAR to your logisim jar/exe")
 
 
-def ensure_dumper() -> None:
-    """Compile tools/java/*.java against the Logisim jar (once)."""
-    if os.path.exists(os.path.join(JAVA_OUT, "LoadDump.class")):
-        return
+def ensure_dumper() -> str:
+    """Compile bundled Java sources against the chosen Logisim binary."""
+    src_files = [os.path.join(JAVA_SRC, f) for f in os.listdir(JAVA_SRC) if f.endswith('.java')]
+    if not src_files:
+        raise RuntimeError('Java sources are missing from the installed package')
+    out_dir = java_output_dir()
+    if all(os.path.exists(os.path.join(out_dir, os.path.basename(s).replace('.java', '.class'))) for s in src_files):
+        return out_dir
     javac = os.path.join(os.path.dirname(find_java()),
                          "javac.exe" if os.name == "nt" else "javac")
-    os.makedirs(JAVA_OUT, exist_ok=True)
-    srcs = [os.path.join(JAVA_SRC, f) for f in os.listdir(JAVA_SRC) if f.endswith(".java")]
-    subprocess.run([javac, "-cp", find_jar(), "-d", JAVA_OUT] + srcs, check=True)
+    os.makedirs(out_dir, exist_ok=True)
+    subprocess.run([javac, "-encoding", "UTF-8", "-cp", find_jar(), "-d", out_dir] + src_files, check=True, timeout=60)
+    return out_dir
 
 
 def dump(circ_path: str) -> str:
-    ensure_dumper()
+    java_out = ensure_dumper()
     env = dict(os.environ)
     # Logisim writes java.util.prefs to the registry, which fails inside
     # sandboxes / CI; MemPrefsFactory keeps them in memory instead.
     env["JAVA_TOOL_OPTIONS"] = (
         "-Djava.awt.headless=true -Djava.util.prefs.PreferencesFactory=MemPrefsFactory")
-    cp = os.pathsep.join([find_jar(), JAVA_OUT])
+    cp = os.pathsep.join([find_jar(), java_out])
     res = subprocess.run([find_java(), "-Xmx1g", "-cp", cp, "LoadDump", circ_path],
-                         capture_output=True, text=True, encoding="utf-8", env=env)
+                         capture_output=True, text=True, encoding="utf-8", env=env, timeout=60)
     out = res.stdout
+    if res.returncode != 0 or 'LOADED main=' not in out:
+        raise RuntimeError('Logisim loader failed: '+res.stderr+'\n'+out)
     if "LOADER ERROR" in out:
         errs = [l for l in out.splitlines() if "ERROR" in l]
         raise RuntimeError("Logisim rejected the file:\n" + "\n".join(errs))
@@ -80,11 +97,11 @@ def normalize(circ_path: str) -> str:
     through SaveAs makes the on-disk file byte-for-byte what Logisim would
     write, so it opens exactly like a hand-saved project.
     """
-    ensure_dumper()
+    java_out = ensure_dumper()
     env = dict(os.environ)
     env["JAVA_TOOL_OPTIONS"] = (
         "-Djava.awt.headless=true -Djava.util.prefs.PreferencesFactory=MemPrefsFactory")
-    cp = os.pathsep.join([find_jar(), JAVA_OUT])
+    cp = os.pathsep.join([find_jar(), java_out])
     tmp = circ_path + ".tmp.circ"
     res = subprocess.run([find_java(), "-Xmx1g", "-cp", cp, "SaveAs", circ_path, tmp],
                          capture_output=True, text=True, encoding="utf-8", env=env)
@@ -214,7 +231,10 @@ class Report:
 
 
 def verify(circ_path: str, drivers=None) -> Report:
-    nl = parse(dump(circ_path))
+    raw = dump(circ_path)
+    if raw.count('\nCIRCUIT ') != 1:
+        raise ValueError('verify() supports one circuit only; use inspect() for multi-circuit projects')
+    nl = parse(raw)
     dangling = nl.dangling_ends()
     conflicts = nl.multi_driver_nets(drivers or [])
     return Report(len(nl.components), len(nl.wires), len(nl.nets()),

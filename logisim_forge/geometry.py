@@ -19,6 +19,8 @@ GATE_PORT_DY: dict[int, tuple[int, ...]] = {
     3: (-20, 0, 20),
     4: (-20, -10, 10, 20),
     5: (-20, -10, 0, 10, 20),
+    6: (-30, -20, -10, 10, 20, 30),
+    7: (-30, -20, -10, 0, 10, 20, 30),
     8: (-40, -30, -20, -10, 10, 20, 30, 40),
 }
 
@@ -43,7 +45,7 @@ def gate_inputs(kind: str, loc: tuple[int, int], inputs: int,
     if kind == "NOT Gate":
         return [(loc[0] - NOT_BODY_W, loc[1])]
     dy = GATE_PORT_DY[inputs]
-    base = NAND_BODY_W if kind == "NAND Gate" else AND_BODY_W
+    base = 70 if kind == "XNOR Gate" else (60 if kind in ("NAND Gate", "NOR Gate", "XOR Gate") else AND_BODY_W)
     return [(loc[0] - base - (10 if i in negated else 0), loc[1] + d)
             for i, d in enumerate(dy)]
 

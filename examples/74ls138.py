@@ -32,8 +32,8 @@ def build() -> Circuit:
     c.not_gate((240, 340))    # ~B
     c.not_gate((240, 420))    # ~C
 
-    # --- enable term E = ~G1 & ~G2A & ~G2B (bubbles on the active-low pins)
-    c.and_gate((420, 100), 3, negated=(1, 2))
+    # G1 is inverted twice, as in the assignment figure: E = G1 & ~G2A & ~G2B.
+    c.and_gate((420, 100), 3, negated=(0, 1, 2))
 
     # --- 8 x 4-input NAND ----------------------------------------------
     ys = [Y0 + STEP * i for i in range(8)]
@@ -43,8 +43,8 @@ def build() -> Circuit:
 
     # --- enable chain wiring -------------------------------------------
     c.wire((110, 60), (210, 60))                      # G1 -> inverter
-    c.wire((240, 60), (300, 60), (300, 80), (370, 80))
-    # inputs 1 and 2 carry bubbles, so their ports are 10 px further left
+    c.wire((240, 60), (300, 60), (300, 80), (360, 80))
+    # All three inputs carry bubbles, so their ports are 10 px further left.
     c.wire((110, 100), (360, 100))
     c.wire((110, 140), (320, 140), (320, 120), (360, 120))
     c.wire((420, 100), (600, 100))                    # E trunk
@@ -89,7 +89,7 @@ def main() -> int:
         return 1
     print("\nG1 G2A G2B | A B C | Y7 Y6 Y5 Y4 Y3 Y2 Y1 Y0   (0 = selected)")
     for g1, g2a, g2b in [(1, 0, 0), (1, 1, 1), (0, 0, 0)]:
-        e = (not g1) and (not g2a) and (not g2b)
+        e = bool(g1) and (not g2a) and (not g2b)
         for a in (0, 1):
             for b in (0, 1):
                 for cc in (0, 1):

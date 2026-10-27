@@ -9,7 +9,6 @@ from __future__ import annotations
 from typing import Any
 
 from .circuit import Circuit
-from .verify import verify as run_verify
 
 try:  # pragma: no cover - exercised only when the MCP SDK is installed
     from mcp.server.fastmcp import FastMCP
@@ -53,7 +52,7 @@ def build_server():
     @mcp.tool()
     def add_gate(circuit: str, kind: str, x: int, y: int,
                  inputs: int = 2, negated: list[int] | None = None) -> dict:
-        """Add a gate. kind in {NOT, AND, OR, NAND, NOR, XOR}.
+        """Add a gate. kind in {NOT, AND, OR, NAND, NOR, XOR, XNOR}.
 
         (x, y) is the OUTPUT port. Returns every port: index 0 is the output,
         the rest are inputs in top-to-bottom order. negated=[1,2] draws bubbles.
@@ -69,6 +68,8 @@ def build_server():
             comp = c.nand_gate((x, y), inputs, negs)
         elif name == "OR Gate":
             comp = c.or_gate((x, y), inputs, negs)
+        elif name in ("NOR Gate", "XOR Gate", "XNOR Gate"):
+            comp = c._add(2, name, (x, y), [("inputs", str(inputs))] + [("negate%d" % i, "true") for i in negs])
         else:
             raise ValueError("unsupported gate %r" % kind)
         ports = c.ports()[id(comp)]
@@ -113,10 +114,28 @@ def build_server():
 
     @mcp.tool()
     def verify_circuit(path: str) -> dict:
-        """Load the file with Logisim itself and report dangling wire ends and
-        shorted drivers. Run this before telling the user the circuit is done."""
-        report = run_verify(path)
-        return report.as_dict()
+        """Check physical-wire topology per circuit. Tunnels and splitter bits
+        are not resolved; use simulate_vectors for functional validation."""
+        from .simulate import inspect
+        return inspect(path)
+
+    @mcp.tool()
+    def simulate_vectors(path: str, circuit: str, vectors_csv: str, image_path: str = '') -> dict:
+        """Load a .circ in real Logisim, drive all input pins and check all outputs.
+        CSV header must list every pin label and may include @x:y net checks.
+        Each row includes inputs and expected outputs as decimal integers; rows
+        share state in order, so clock 0->1 drives sequential circuits. Fails on
+        unknown/error values, width mismatch, oscillation or mismatches. Optional
+        PNG shows the final native simulated state. Only tested with Logisim-ITA.
+        """
+        from .simulate import simulate
+        return simulate(path, circuit, vectors_csv, image_path)
+
+    @mcp.tool()
+    def inspect_project(path: str) -> dict:
+        """Return circuit-scoped topology checks from the real Logisim loader."""
+        from .simulate import inspect
+        return inspect(path)
 
     return mcp
 

@@ -8,7 +8,7 @@ Logisim 没有插件 API、没有 socket、没有命令行控制接口。它唯�
 **`.circ` 文件**——一个纯文本 XML。这个项目就把这条缝隙做成工具：
 
 - **写**：用 Python 描述电路（门、引脚、总线），生成 Logisim 能直接打开的 `.circ`；
-- **验**：调用 **Logisim 自己的加载器**把文件读回来，重建网络表，检查悬空线头、短路、多驱动；
+- **验**：调用 **Logisim 自己的加载器和仿真器**，检查连线并按输入向量验证实际输出；
 - **用**：包成 MCP server，任何支持 MCP 的客户端都能"说一句话画一个电路"。
 
 ## 为什么不是"直接点鼠标"
@@ -30,7 +30,7 @@ pip install -e .            # 只需要 Python 3.9+
 pip install -e ".[mcp]"     # 想跑 MCP server 再装这个
 ```
 
-校验功能需要 Java + 一个 Logisim 的 jar（Logisim 2.7.1 或 Logisim-ITA / Logisim-evolution 均可）：
+校验和仿真需要 **JDK 11+**（包括 `javac`）以及 Logisim jar/exe。本次新增的仿真桥已在 Windows 的 **Logisim-ITA 2.16.1.4** 上验证；其他版本需要自行确认 API 兼容性：
 
 ```bash
 set LOGISIM_JAR=E:\Logisim\Logisim-ITA.exe          # Windows
@@ -56,8 +56,28 @@ python -m logisim_forge verify examples/74ls138.circ
 }
 ```
 
-`dangling` 就是"看起来断掉的线头"，`conflicts` 是两个驱动接到同一根线上的短路。
-两个都为空才算过。
+`dangling` 是物理线段上的悬空端点；`conflicts` 检查指定驱动端所在的物理网络。库函数 `verify(..., drivers=...)` 才有调用者提供的驱动端；CLI 的 `verify` 没有提供驱动列表，不能据此断言没有短路。它只支持单子电路；多子电路使用下面的 `inspect`。静态检查不解析 Tunnel 同名连接及分线器的每一位，不能替代仿真。
+
+### 用 Logisim 内核验证输入与输出
+
+```bash
+python -m logisim_forge inspect examples/74ls138.circ
+python -m logisim_forge simulate examples/74ls138.circ main examples/74ls138-vectors.csv --image decoder.png
+```
+
+`simulate` 使用 Logisim 的 Loader 加载电路，设置输入 Pin，运行 Propagator，再读取输出 Pin 并对照 CSV 的期望值。每一行**保留上一行的状态**，因此可以在时序测试中先稳定数据和控制，再用 `CLK=0`、`CLK=1` 两行产生上升沿。CSV 必须列出选定电路中所有输入和输出 Pin 的唯一标签，支持额外的 `@x:y` 列检查电路坐标处的实际值。所有数字使用十进制；32 位数接受有符号整数或 0～4294967295，输出记录使用 Java 的有符号整数表示。空测试、错误预期、未定义值、位宽冲突和振荡会失败。
+
+```csv
+CLK,D,Q
+0,0,0
+0,1,0
+1,1,1
+1,0,1
+0,0,1
+1,0,0
+```
+
+以上是正边沿 D 触发器的示意向量：前两行先设置数据，第三行产生上升沿；保持时钟为 1 改变 D 不应再次触发。输入在同一行同时变化时没有建立时间保证。`--image` 使用 Logisim 原生绘图器渲染最后一行状态，不是 GUI 屏幕截图。仿真测试的范围取决于提供的向量；不会自动生成真值表，也不验证物理电路时序。
 
 ### 作为库用
 
@@ -99,7 +119,8 @@ print(verify("not.circ", drivers=c.drivers()).as_dict())
 | `add_wire(points)` | 折线布线（只能横平竖直） |
 | `list_components()` | 列出元件和端口，方便改线 |
 | `save_circuit(path)` | 写 `.circ` |
-| `verify_circuit(path)` | 让 Logisim 读回并检查断头/短路 |
+| `verify_circuit(path)` / `inspect_project(path)` | 按子电路检查悬空线头和局部物理网络多驱动；有 Tunnel/分线器限制 |
+| `simulate_vectors(path, circuit, vectors_csv, image_path)` | 按 CSV 顺序驱动并检查实际 Logisim 仿真；可导出末状态 PNG |
 
 设计上有一个刻意的取舍：**所有 add_* 都返回端口坐标**。模型不需要背几何表，
 拿到 `ports` 直接连线就不会差一格——这是把"人类经验"塞进工具返回值里。
@@ -110,7 +131,7 @@ print(verify("not.circ", drivers=c.drivers()).as_dict())
 
 | 部分 | 实现 |
 | --- | --- |
-| 使能 | 3 输入与门，输入为 `~G1`、`G2A_L`、`G2B_L`（后两个画反相圈） |
+| 使能 | G1 先取反再进入反相输入；最终 `E=G1 & ~G2A_L & ~G2B_L` |
 | 地址 | `A/B/C` 各一个非门，六根线做成竖直总线 |
 | 译码 | 8 个 4 输入与非门，每门接三个地址位（原/反）+ 使能项 |
 | 输出 | `Y0_L ~ Y7_L`，低有效 |
@@ -149,8 +170,8 @@ Circuit ──▶│ to_xml()     │──▶ .circ ──▶ Logisim 打开
 - [x] MCP 工具集
 - [x] 74LS138 示例
 - [ ] 自动布局（网表 → 坐标）
-- [ ] 真值表仿真校验（驱动引脚 + 读输出）
-- [ ] 时序电路（触发器 / 时钟）支持
+- [x] 使用 CSV 对组合和时序电路执行 Logisim 仿真（其他 Logisim 版本兼容性待验证）
+- [ ] 自动生成真值表与时序测试向量
 
 ## 许可
 

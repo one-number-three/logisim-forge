@@ -50,7 +50,7 @@
     <wire from="(110,60)" to="(210,60)"/>
     <wire from="(240,60)" to="(300,60)"/>
     <wire from="(300,60)" to="(300,80)"/>
-    <wire from="(300,80)" to="(370,80)"/>
+    <wire from="(300,80)" to="(360,80)"/>
     <wire from="(110,100)" to="(360,100)"/>
     <wire from="(110,140)" to="(320,140)"/>
     <wire from="(320,120)" to="(320,140)"/>
@@ -208,6 +208,7 @@
     <comp lib="2" loc="(420,100)" name="AND Gate">
       <a name="size" val="50"/>
       <a name="inputs" val="3"/>
+      <a name="negate0" val="true"/>
       <a name="negate1" val="true"/>
       <a name="negate2" val="true"/>
     </comp>

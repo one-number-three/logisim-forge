@@ -189,7 +189,7 @@ Logisim 内部按 10px 吸附。写 `(105, 60)` 不会报错，但端口在 110�
 
 - **注册表**：Java 的 `java.util.prefs` 在 Windows 上写注册表，沙箱/CI 里会被拒绝，
   Logisim 直接 `ExceptionInInitializerError`。解决：自带一个内存版 `PreferencesFactory`
-  （`tools/java/MemPrefs*.java`），用 `-Djava.util.prefs.PreferencesFactory=MemPrefsFactory`
+  （`logisim_forge/java/MemPrefs*.java`），用 `-Djava.util.prefs.PreferencesFactory=MemPrefsFactory`
   启动。
 - **自动更新弹窗**：ITA 版启动会连服务器查新版本，联网时会弹窗挡住主窗口。
   解决：把 HTTP 代理指向一个黑洞端口（`-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9`），
@@ -237,7 +237,7 @@ Logisim 加载时会把**没有子元素的库丢掉**。Base 库一没，`Poke 
 
 ```python
 circuit.save(path)
-normalize(path)      # 内部调用 tools/java/SaveAs.java
+normalize(path)      # 内部调用 logisim_forge/java/SaveAs.java
 ```
 
 `examples/74ls138.py` 现在就是这么做的。往返之后 `source` 变成真实版本号，Base 库带上 Text Tool，
